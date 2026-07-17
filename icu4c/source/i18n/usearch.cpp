@@ -23,6 +23,7 @@
 #include "ucln_in.h"
 #include "uassert.h"
 #include "ustr_imp.h"
+#include "umutex.h"
 
 U_NAMESPACE_USE
 
@@ -37,6 +38,7 @@ U_NAMESPACE_USE
 #define SUPPLEMENTARY_MIN_VALUE_ 0x10000
 
 static const Normalizer2Impl *g_nfcImpl = NULL;
+static UInitOnce gSearchNFCInitOnce = U_INITONCE_INITIALIZER;
 
 // internal methods -------------------------------------------------
 
@@ -99,9 +101,15 @@ U_CDECL_BEGIN
 static UBool U_CALLCONV
 usearch_cleanup(void) {
     g_nfcImpl = NULL;
+    gSearchNFCInitOnce.reset();
     return TRUE;
 }
 U_CDECL_END
+
+static void U_CALLCONV initNFCImpl(UErrorCode *status) {
+    g_nfcImpl = Normalizer2Factory::getNFCImpl(*status);
+    ucln_i18n_registerCleanup(UCLN_I18N_USEARCH, usearch_cleanup);
+}
 
 /**
 * Initializing the fcd tables.
@@ -112,10 +120,7 @@ U_CDECL_END
 static
 inline void initializeFCD(UErrorCode *status)
 {
-    if (g_nfcImpl == NULL) {
-        g_nfcImpl = Normalizer2Factory::getNFCImpl(*status);
-        ucln_i18n_registerCleanup(UCLN_I18N_USEARCH, usearch_cleanup);
-    }
+    umtx_initOnce(gSearchNFCInitOnce, &initNFCImpl, status);
 }
 
 /**
